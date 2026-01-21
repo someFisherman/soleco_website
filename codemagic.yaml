@@ -6,7 +6,7 @@ workflows:
     environment:
       flutter: stable
 
-      # <-- DAS ist der entscheidende Fix:
+      # Importiere die Variable Group aus Codemagic (bei dir heisst sie "website")
       groups:
         - website
 
@@ -22,40 +22,40 @@ workflows:
           include: true
 
     scripts:
-      - name: Check: sind App Store Connect Variablen da? (ohne Werte zu leaken)
+      - name: "Check App Store Connect Variablen vorhanden"
         script: |
           if [ -z "$APP_STORE_CONNECT_ISSUER_ID" ]; then echo "ISSUER_ID fehlt"; exit 1; fi
           if [ -z "$APP_STORE_CONNECT_KEY_ID" ]; then echo "KEY_ID fehlt"; exit 1; fi
           if [ -z "$APP_STORE_CONNECT_API_KEY" ]; then echo "API_KEY fehlt"; exit 1; fi
-          echo "ASC Variablen vorhanden ✅"
+          echo "ASC Variablen vorhanden"
 
-      - name: Flutter packages holen
+      - name: "Flutter packages holen"
         script: |
           flutter pub get
 
-      - name: Codemagic CLI Tools installieren
+      - name: "Codemagic CLI Tools installieren"
         script: |
           pip3 install -U codemagic-cli-tools
 
-      - name: Keychain initialisieren
+      - name: "Keychain initialisieren"
         script: |
           keychain initialize
 
-      - name: Signing Files holen/erstellen (App Store / TestFlight)
+      - name: "Signing Files holen und erstellen"
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
 
-      - name: Zertifikate in Keychain importieren
+      - name: "Zertifikate in Keychain importieren"
         script: |
           keychain add-certificates
 
-      - name: Profiles im Xcode-Projekt setzen
+      - name: "Profiles im Xcode-Projekt setzen"
         script: |
           xcode-project use-profiles
 
-      - name: iOS bauen (IPA)
+      - name: "iOS bauen (IPA)"
         script: |
           flutter build ipa --release \
             --dart-define=START_URL=$START_URL
