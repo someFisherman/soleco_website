@@ -66,7 +66,8 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
   }
 
   bool _isAllowed(Uri uri) {
-    return AppConfig.allowedHosts.contains(uri.host.toLowerCase());
+    final host = uri.host.toLowerCase();
+    return AppConfig.allowedHosts.any((h) => host == h || host.endsWith('.$h'));
   }
 
   NavigationActionPolicy _handleUrl(Uri uri) {
