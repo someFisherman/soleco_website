@@ -34,21 +34,23 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
   bool _isLoading = true;
   bool _isOfflineOverlay = false;
 
-  StreamSubscription<ConnectivityResult>? _connSub;
+  StreamSubscription<List<ConnectivityResult>>? _connSub;
 
   @override
   void initState() {
     super.initState();
+    _setupConnectivityMonitoring();
+  }
 
+  Future<void> _setupConnectivityMonitoring() async {
     // Initialer Online/Offline Check
-    Connectivity().checkConnectivity().then((r) {
-      if (!mounted) return;
-      setState(() => _isOfflineOverlay = (r == ConnectivityResult.none));
-    });
+    final results = await Connectivity().checkConnectivity();
+    if (!mounted) return;
+    setState(() => _isOfflineOverlay = results.contains(ConnectivityResult.none));
 
     // Live Monitoring
-    _connSub = Connectivity().onConnectivityChanged.listen((r) async {
-      final offline = (r == ConnectivityResult.none);
+    _connSub = Connectivity().onConnectivityChanged.listen((results) async {
+      final offline = results.contains(ConnectivityResult.none);
       if (!mounted) return;
 
       setState(() => _isOfflineOverlay = offline);
@@ -67,13 +69,13 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
   }
 
   bool _isAllowed(Uri uri) {
-    final host = uri.host.toLowerCase();
-    return AppConfig.allowedHosts.contains(host);
+    return AppConfig.allowedHosts.contains(uri.host.toLowerCase());
   }
 
   NavigationActionPolicy _handleUrl(Uri uri) {
-    // Nur http/https erlauben
     final scheme = uri.scheme.toLowerCase();
+
+    // Nur http/https erlauben
     if (scheme != "http" && scheme != "https") {
       return NavigationActionPolicy.CANCEL;
     }
@@ -83,8 +85,8 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
       return NavigationActionPolicy.ALLOW;
     }
 
-    // Externe Links: BLOCKIERT (maximale Sperre)
-    // Wenn du statt blockieren -> Safari öffnen willst, sag "Safari öffnen".
+    // Externe Links: BLOCKIERT
+    // (Wenn du externe Links in Safari öffnen willst, sag "Safari öffnen".)
     return NavigationActionPolicy.CANCEL;
   }
 
@@ -93,10 +95,12 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
     return WillPopScope(
       // Android Back Button: erst WebView zurück, dann App exit
       onWillPop: () async {
-        if (_controller == null) return true;
-        final canGoBack = await _controller!.canGoBack();
+        final controller = _controller;
+        if (controller == null) return true;
+
+        final canGoBack = await controller.canGoBack();
         if (canGoBack) {
-          await _controller!.goBack();
+          await controller.goBack();
           return false;
         }
         return true;
@@ -108,9 +112,7 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
           child: Stack(
             children: [
               InAppWebView(
-                initialUrlRequest: URLRequest(
-                  url: WebUri(AppConfig.startUrl),
-                ),
+                initialUrlRequest: URLRequest(url: WebUri(AppConfig.startUrl)),
                 initialSettings: InAppWebViewSettings(
                   javaScriptEnabled: true,
                   mediaPlaybackRequiresUserGesture: false,
@@ -123,17 +125,15 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
                   // verhindert popups / neue Fenster
                   javaScriptCanOpenWindowsAutomatically: false,
                 ),
-                onWebViewCreated: (controller) {
-                  _controller = controller;
-                },
+                onWebViewCreated: (controller) => _controller = controller,
                 onLoadStart: (_, __) {
-                  setState(() => _isLoading = true);
+                  if (mounted) setState(() => _isLoading = true);
                 },
                 onLoadStop: (_, __) {
-                  setState(() => _isLoading = false);
+                  if (mounted) setState(() => _isLoading = false);
                 },
                 onReceivedError: (_, __, ___) {
-                  setState(() => _isOfflineOverlay = true);
+                  if (mounted) setState(() => _isOfflineOverlay = true);
                 },
                 shouldOverrideUrlLoading: (_, action) async {
                   final uri = action.request.url?.uriValue;
@@ -178,6 +178,7 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
                             const SizedBox(height: 16),
                             ElevatedButton(
                               onPressed: () async {
+                                if (!mounted) return;
                                 setState(() => _isOfflineOverlay = false);
                                 await _controller?.reload();
                               },
