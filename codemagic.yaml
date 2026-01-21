@@ -45,7 +45,10 @@ workflows:
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --create
+            --create \
+            --certificate-key "$CERTIFICATE_PRIVATE_KEY" \
+            --p12-password "$P12_PASSWORD"
+
 
       - name: "Zertifikate in Keychain importieren"
         script: |
