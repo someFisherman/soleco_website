@@ -43,19 +43,16 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
   }
 
   Future<void> _setupConnectivityMonitoring() async {
-    // Kein initialer "offline" state aus connectivity_plus setzen.
-    // iOS liefert hier manchmal false negatives. Wir lassen die WebView entscheiden.
+    // Kein initialer "offline"-State aus connectivity_plus setzen (iOS hat teils false negatives).
+    // Wir reagieren nur: wenn wieder online -> Overlay weg + reload.
     _connSub = Connectivity().onConnectivityChanged.listen((results) async {
       final offline = results.contains(ConnectivityResult.none);
       if (!mounted) return;
 
-      // Wenn wieder online -> Overlay weg + reload
       if (!offline) {
         setState(() => _isOfflineOverlay = false);
         await _controller?.reload();
       }
-      // Wenn offline -> NICHT sofort Overlay zeigen.
-      // Das macht onReceivedError zuverlässig, wenn ein Load wirklich scheitert.
     });
   }
 
@@ -67,6 +64,7 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
 
   bool _isAllowed(Uri uri) {
     final host = uri.host.toLowerCase();
+    // erlaubt exakte Hosts und Subdomains (host == h oder host endet mit ".h")
     return AppConfig.allowedHosts.any((h) => host == h || host.endsWith('.$h'));
   }
 
@@ -78,7 +76,7 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
       return NavigationActionPolicy.CANCEL;
     }
 
-    // Domain Lock: nur erlaubte Hosts in-app laden
+    // Domain Lock
     if (_isAllowed(uri)) {
       return NavigationActionPolicy.ALLOW;
     }
@@ -105,8 +103,9 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
       },
       child: Scaffold(
         body: SafeArea(
-          top: false,
-          bottom: false,
+          // ✅ Wichtig: Safe Areas respektieren, sonst wird oben/unten abgeschnitten/verschoben
+          top: true,
+          bottom: true,
           child: Stack(
             children: [
               InAppWebView(
@@ -122,46 +121,36 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
 
                   // verhindert popups / neue Fenster
                   javaScriptCanOpenWindowsAutomatically: false,
+
+                  // iOS-friendly
+                  allowsInlineMediaPlayback: true,
                 ),
                 onWebViewCreated: (controller) {
                   _controller = controller;
                 },
-
-                onLoadStart: (_, url) {
+                onLoadStart: (_, __) {
                   if (!mounted) return;
                   setState(() {
                     _isLoading = true;
-                    // sobald ein Load startet, Overlay aus (wir geben der Seite eine Chance)
+                    // wenn ein Load startet, geben wir der Seite eine Chance
                     _isOfflineOverlay = false;
                   });
-
-                  // Optional Debug:
-                  // debugPrint("Load start: $url");
                 },
-
-                onLoadStop: (_, url) {
+                onLoadStop: (_, __) {
                   if (!mounted) return;
                   setState(() {
                     _isLoading = false;
                     _isOfflineOverlay = false;
                   });
-
-                  // Optional Debug:
-                  // debugPrint("Load stop: $url");
                 },
-
-                onReceivedError: (_, __, error) {
-                  // Nur bei echten Ladefehlern Offline Overlay zeigen
+                onReceivedError: (_, __, ___) {
+                  // Offline Overlay nur bei echten Ladefehlern
                   if (!mounted) return;
                   setState(() {
                     _isLoading = false;
                     _isOfflineOverlay = true;
                   });
-
-                  // Optional Debug:
-                  // debugPrint("WebView error: ${error.description}");
                 },
-
                 shouldOverrideUrlLoading: (_, action) async {
                   final uri = action.request.url?.uriValue;
                   if (uri == null) return NavigationActionPolicy.CANCEL;
