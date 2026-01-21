@@ -5,6 +5,13 @@ workflows:
 
     environment:
       flutter: stable
+
+      # iOS Code Signing (automatic) für TestFlight
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.soleco.solecoWebsite
+
+      # App-Konfiguration
       vars:
         START_URL: https://soleco-optimizer-beta.azurewebsites.net/
 
