@@ -5,14 +5,8 @@ workflows:
 
     environment:
       flutter: stable
-
-      # iOS Code Signing (automatic) für TestFlight
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.soleco.solecoWebsite
-
-      # App-Konfiguration
       vars:
+        BUNDLE_ID: com.soleco.solecoWebsite
         START_URL: https://soleco-optimizer-beta.azurewebsites.net/
 
     triggering:
@@ -26,6 +20,28 @@ workflows:
       - name: Flutter packages holen
         script: |
           flutter pub get
+
+      - name: Codemagic CLI Tools installieren
+        script: |
+          pip3 install -U codemagic-cli-tools
+
+      - name: Keychain initialisieren
+        script: |
+          keychain initialize
+
+      - name: Signing Files holen/erstellen (App Store / TestFlight)
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Zertifikate in Keychain importieren
+        script: |
+          keychain add-certificates
+
+      - name: Profiles im Xcode-Projekt setzen
+        script: |
+          xcode-project use-profiles
 
       - name: iOS bauen (IPA)
         script: |
