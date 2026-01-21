@@ -6,12 +6,16 @@ workflows:
     environment:
       flutter: stable
 
-      # Importiere die Variable Group aus Codemagic (bei dir heisst sie "website")
+      # Importiere deine Env-Var-Gruppe
       groups:
         - website
 
+      # Codemagic iOS automatic signing
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.soleco.solecoWebsite
+
       vars:
-        BUNDLE_ID: com.soleco.solecoWebsite
         START_URL: https://soleco-optimizer-beta.azurewebsites.net/
 
     triggering:
@@ -22,41 +26,9 @@ workflows:
           include: true
 
     scripts:
-      - name: "Check App Store Connect Variablen vorhanden"
-        script: |
-          if [ -z "$APP_STORE_CONNECT_ISSUER_ID" ]; then echo "ISSUER_ID fehlt"; exit 1; fi
-          if [ -z "$APP_STORE_CONNECT_KEY_ID" ]; then echo "KEY_ID fehlt"; exit 1; fi
-          if [ -z "$APP_STORE_CONNECT_API_KEY" ]; then echo "API_KEY fehlt"; exit 1; fi
-          echo "ASC Variablen vorhanden"
-
       - name: "Flutter packages holen"
         script: |
           flutter pub get
-
-      - name: "Codemagic CLI Tools installieren"
-        script: |
-          pip3 install -U codemagic-cli-tools
-
-      - name: "Keychain initialisieren"
-        script: |
-          keychain initialize
-
-      - name: "Signing Files holen und erstellen"
-        script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create \
-            --certificate-key "$CERTIFICATE_PRIVATE_KEY" \
-            --p12-password "$P12_PASSWORD"
-
-
-      - name: "Zertifikate in Keychain importieren"
-        script: |
-          keychain add-certificates
-
-      - name: "Profiles im Xcode-Projekt setzen"
-        script: |
-          xcode-project use-profiles
 
       - name: "iOS bauen (IPA)"
         script: |
