@@ -43,22 +43,19 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
   }
 
   Future<void> _setupConnectivityMonitoring() async {
-    // Initialer Online/Offline Check
-    final results = await Connectivity().checkConnectivity();
-    if (!mounted) return;
-    setState(() => _isOfflineOverlay = results.contains(ConnectivityResult.none));
-
-    // Live Monitoring
+    // Kein initialer "offline" state aus connectivity_plus setzen.
+    // iOS liefert hier manchmal false negatives. Wir lassen die WebView entscheiden.
     _connSub = Connectivity().onConnectivityChanged.listen((results) async {
       final offline = results.contains(ConnectivityResult.none);
       if (!mounted) return;
 
-      setState(() => _isOfflineOverlay = offline);
-
-      // wenn wieder online: reload
+      // Wenn wieder online -> Overlay weg + reload
       if (!offline) {
+        setState(() => _isOfflineOverlay = false);
         await _controller?.reload();
       }
+      // Wenn offline -> NICHT sofort Overlay zeigen.
+      // Das macht onReceivedError zuverlässig, wenn ein Load wirklich scheitert.
     });
   }
 
@@ -80,7 +77,7 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
       return NavigationActionPolicy.CANCEL;
     }
 
-    // Domain Lock
+    // Domain Lock: nur erlaubte Hosts in-app laden
     if (_isAllowed(uri)) {
       return NavigationActionPolicy.ALLOW;
     }
@@ -125,16 +122,45 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
                   // verhindert popups / neue Fenster
                   javaScriptCanOpenWindowsAutomatically: false,
                 ),
-                onWebViewCreated: (controller) => _controller = controller,
-                onLoadStart: (_, __) {
-                  if (mounted) setState(() => _isLoading = true);
+                onWebViewCreated: (controller) {
+                  _controller = controller;
                 },
-                onLoadStop: (_, __) {
-                  if (mounted) setState(() => _isLoading = false);
+
+                onLoadStart: (_, url) {
+                  if (!mounted) return;
+                  setState(() {
+                    _isLoading = true;
+                    // sobald ein Load startet, Overlay aus (wir geben der Seite eine Chance)
+                    _isOfflineOverlay = false;
+                  });
+
+                  // Optional Debug:
+                  // debugPrint("Load start: $url");
                 },
-                onReceivedError: (_, __, ___) {
-                  if (mounted) setState(() => _isOfflineOverlay = true);
+
+                onLoadStop: (_, url) {
+                  if (!mounted) return;
+                  setState(() {
+                    _isLoading = false;
+                    _isOfflineOverlay = false;
+                  });
+
+                  // Optional Debug:
+                  // debugPrint("Load stop: $url");
                 },
+
+                onReceivedError: (_, __, error) {
+                  // Nur bei echten Ladefehlern Offline Overlay zeigen
+                  if (!mounted) return;
+                  setState(() {
+                    _isLoading = false;
+                    _isOfflineOverlay = true;
+                  });
+
+                  // Optional Debug:
+                  // debugPrint("WebView error: ${error.description}");
+                },
+
                 shouldOverrideUrlLoading: (_, action) async {
                   final uri = action.request.url?.uriValue;
                   if (uri == null) return NavigationActionPolicy.CANCEL;
@@ -179,7 +205,10 @@ class _SolecoWebWrapperScreenState extends State<SolecoWebWrapperScreen> {
                             ElevatedButton(
                               onPressed: () async {
                                 if (!mounted) return;
-                                setState(() => _isOfflineOverlay = false);
+                                setState(() {
+                                  _isOfflineOverlay = false;
+                                  _isLoading = true;
+                                });
                                 await _controller?.reload();
                               },
                               child: const Text("Neu laden"),
